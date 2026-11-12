@@ -262,3 +262,19 @@ a.btn{text-decoration:none}
 .teach p{margin:0}
 .phbad{color:var(--bad);text-decoration:underline}
 .lv.mt{background:color-mix(in srgb,var(--sun) 25%,var(--surface));margin-right:4px}
+
+/* Đồ thị ghi nhớ (demo 11) */
+.memr{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line, rgba(0,0,0,.08))}
+.memr:last-child{border-bottom:0}
+.memb{flex:0 0 8px;align-self:stretch;min-height:36px;border-radius:6px;background:rgba(0,0,0,.08);display:flex;flex-direction:column-reverse;overflow:hidden}
+.memb i{display:block;width:100%!important;background:var(--good, #3a8f5c)}
+.memb i.mid{background:var(--sun, #F2B33D)}
+.memb i.lo{background:var(--bad, #c8553d)}
+.memdays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.memdays span{display:flex;flex-direction:column;padding:6px 0;border-radius:10px;background:rgba(0,0,0,.05)}
+.memdays i{font-style:normal}
+.lv.m1{background:#fde7e1;color:#9b3b24}.lv.m2{background:#fdf1d6;color:#7a5600}.lv.m3{background:#e3f0e8;color:#2d6a45}.lv.m4{background:#dceaf5;color:#245278}
+.dcard{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:14px;background:rgba(0,0,0,.04);margin-top:8px}
+.dcard .en{margin:0}.dcard p{margin:0}
+.grp summary .n .pct,.grp summary .n .st{margin-right:6px}
+.seg:has(button:nth-child(4)) button{white-space:nowrap;font-size:.86em;padding-left:2px;padding-right:2px}

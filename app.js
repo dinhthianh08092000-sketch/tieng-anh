@@ -1,4 +1,4 @@
-/* Tiếng Anh Nhà Mình - bản demo 11 (nhận giọng Android không lặp, giọng khớp chữ, đồ thị ghi nhớ) */
+/* Tiếng Anh Nhà Mình - bản demo 12 (bộ chấm phát âm trong máy, đồ thị ghi nhớ) */
 'use strict';
 /* ============ Biểu tượng ============ */
 const P = {
@@ -466,6 +466,12 @@ const VIEWS = {};
 
 /* ============ HÔM NAY ============ */
 VIEWS.today = v => {
+  if (S.set.pron == null){
+    const n = sec(`<div class="row" style="flex-wrap:nowrap"><img src="img/mic.png" alt="" width="30"><span class="sm" style="flex:1"><b>Có bộ chấm phát âm mới, chuẩn hơn</b>: chấm từng âm ngay trong máy, không cần Chrome. Lần đầu tải 242 MB.</span></div><div class="row"><button class="btn sun" id="pnow">Bật trong Cài đặt</button><button class="btn ghost" id="plater">Để sau</button></div>`);
+    n.querySelector('#pnow').onclick = () => { NOTE.tab = 'set'; OPENG['st-pron'] = true; TAB = 'docs'; render(); setTimeout(() => { const f = document.querySelector('[data-g="st-pron"]'); if (f){ f.open = true; f.scrollIntoView({block:'center'}); } }, 50); };
+    n.querySelector('#plater').onclick = () => { S.set.pron = 'off'; save(); render(); };
+    v.appendChild(n);
+  }
   const st = stageOf(S.xp), cur = STAGES[st], nx = STAGES[st + 1];
   const pct = nx ? Math.round((S.xp - cur[2]) / (nx[2] - cur[2]) * 100) : 100;
   const cs = curSlot(), fn = flowNext();
@@ -592,6 +598,21 @@ function speakBlock(el, item, {mode = 'full', timer = 0, showVi = true, rates = 
     const hint = () => `<span class="rec-dot"></span> Đang ghi âm ${Math.round((Date.now() - ts) / 1000)}s · đọc xong thì <b>bấm nút đỏ để dừng</b>`;
     let heard = ''; q('h').innerHTML = hint();
     const tick = setInterval(() => { if (!heard) q('h').innerHTML = hint(); }, 1000);
+    if (pronOn()){
+      hush(); let blob;
+      try{ blob = await recordClip({onVoice:() => { tVoice ||= Date.now(); }}); }
+      catch{ clearInterval(tick); m.classList.remove('live'); m.innerHTML = ico('mic'); m.dataset.tip = 'Nói'; q('h').textContent = MICERR['not-allowed']; return; }
+      clearInterval(tick); m.classList.remove('live'); m.innerHTML = ico('mic'); m.dataset.tip = 'Nói';
+      lastClip = URL.createObjectURL(blob);
+      q('h').textContent = 'Đang chấm từng âm...';
+      let r = null;
+      try{ const {pcm} = await decode16k(blob); r = await pronScore(item.en, pcm, n => q('h').textContent = `Tải bộ chấm lần đầu: ${n}% (nên dùng wifi)`); }
+      catch(e){ console.warn(e); q('h').textContent = 'Bộ chấm chưa chạy được (lần đầu cần mạng để tải). Bấm micro thử lại.'; return; }
+      if (!r || r.silent){ q('h').textContent = MICERR['no-speech']; return; }
+      spoke(); q('h').textContent = '';
+      done = false; finishWith(r, r.heard, !timer || ((tVoice || Date.now()) - t0) / 1000 <= timer + 1);
+      return;
+    }
     const res = await listen(t => { heard = t; q('h').innerHTML = '<span class="heard">' + esc(t) + '</span><br><span class="xs">Bấm nút đỏ khi đọc xong</span>'; }, () => { tVoice ||= Date.now(); });
     clearInterval(tick); m.classList.remove('live'); m.innerHTML = ico('mic'); m.dataset.tip = 'Nói';
     if (!res.text){ q('h').textContent = res.msg || MICERR[res.err] || MICERR['no-speech']; return; }
@@ -1317,6 +1338,64 @@ async function teacherScore(target, res){
   for (const said of cands){ const r = await gradeOnce(target, said); if (!best || r.score > best.score) best = Object.assign(r, {heard:said}); }
   return best;
 }
+/* ============ BỘ CHẤM PHÁT ÂM TRONG MÁY ============ */
+/* Nghe giọng bạn và so từng âm với câu mẫu (không đoán chữ như Chrome, nên không tự sửa giúp bạn).
+   Mô hình ~242 MB tải một lần, chạy bằng card đồ họa nếu có. Xem pron.js, gop.js. */
+let PRON = null;
+const pronMod = () => PRON || (PRON = import('./pron.js').catch(e => { PRON = null; throw e; }));
+const pronOn = () => S.set.pron === 'on';
+const pronProg = cb => p => { if (p.status === 'progress' && /\.onnx/.test(p.file || '')) cb?.(Math.round(p.progress || 0)); };
+async function pronTarget(en, M){
+  const disp = en.replace(/-/g, ' - ').split(/\s+/).filter(w => w && w !== '-');
+  const tg = [], W = [];
+  for (let i = 0; i < disp.length; i++){
+    const raw = disp[i].toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9']/g, '').replace(/^'+|'+$/g, '');
+    const w = NUMW[raw] || raw; let p = w ? (await dictGet(w))?.p : null;
+    if (!p && w) for (const f of baseForms(w).slice(1)){ const q = (await dictGet(f))?.p; if (q){ p = q + (/s$/.test(w) ? (/(P|T|K|F|TH)\d?$/.test(q) ? ' S' : ' Z') : ''); break; } }
+    const ks = p ? phList(p).map(M.phKey) : [];
+    W.push({w:disp[i], tot:ks.length, ok:0, errs:[], tp:ks, said:[], unk:!ks.length});
+    const st = p ? phList(p).map(a => (a.match(/\d$/) || [''])[0]) : [];
+    ks.forEach((k, j) => tg.push({w:raw, wi:i, j, k, s:st[j]}));
+  }
+  return {tg, W};
+}
+/* Đo tốc độ: chấm một câu mẫu giọng Mỹ (phải gần 100 điểm) */
+async function pronTest(){
+  const pst = t => { const e = document.querySelector('#pronst'); if (e) e.innerHTML = t; };
+  const c = D.life[0].days[0].cards.find(x => x.a && !x.pz) || D.life[0].days[0].cards[0];
+  pst('Đang đo tốc độ...');
+  try{
+    const a = Array.isArray(c.a) ? c.a[0] : c.a, buf = await (await fetch(a)).blob(), {pcm} = await decode16k(buf);
+    await pronScore(c.en, pcm.slice(0, 16000));   // lần chạy đầu để khởi động
+    const t0 = performance.now(), r = await pronScore(c.en, pcm), dt = (performance.now() - t0) / 1000, M = await pronMod(), dev = await M.device();
+    pst(`Chấm câu "${esc(c.en)}" (giọng mẫu) mất <b>${dt.toFixed(1)} giây</b>, được ${r?.score ?? 0} điểm. Chạy bằng ${dev === 'webgpu' ? 'card đồ họa (nhanh)' : 'CPU (máy không hỗ trợ card đồ họa nên chậm hơn)'}.${dt > 6 ? ' Máy hơi chậm: mỗi câu phải chờ vài giây.' : ''}`);
+  }catch(e){ console.warn(e); pst('Chưa đo được: ' + esc(e.message || '')); }
+}
+/* Trả về kết quả cùng dạng với cách chấm cũ (để dùng chung phần chữa lỗi của giáo viên) */
+async function pronScore(en, pcm, onProg){
+  const M = await pronMod(), {tg, W} = await pronTarget(en, M);
+  if (!tg.length) return null;
+  const out = await M.run(pcm, tg, pronProg(onProg));
+  if (!out.heard.replace(/\s/g, '')) return {silent:true};
+  const errs = [];
+  out.ph.forEach(p => {
+    const ww = W[p.wi], kk = p.k;
+    /* Nguyên âm không nhấn bị nuốt khi nói nhanh (usually → "juːʒli") là cách nói tự nhiên, không tính lỗi */
+    if (p.g >= .35 || (p.s === '0' && isVowel(kk) && !(p.po > .25))){ ww.ok++; return; }
+    ww.errs.push(p.j);
+    const got = M.REV[p.heard], fin = !isVowel(kk) && ww.tp.slice(p.j + 1).every(x => !isVowel(x));
+    errs.push(p.po > .25 && got && got !== kk.replace(/0$/, '') ? {k:'sub', exp:kk, got, fin, w:ww.w, ipa:ww.tp, at:p.j} : {k:'del', exp:kk, fin, w:ww.w, ipa:ww.tp, at:p.j});
+  });
+  /* Cả từ không nghe thấy âm nào đúng: thiếu từ */
+  W.forEach(ww => { if (ww.tot >= 2 && ww.ok === 0 && errs.filter(e => e.w === ww.w).every(e => e.k === 'del')){ ww.missing = true; for (let i = errs.length - 1; i >= 0; i--) if (errs[i].w === ww.w) errs.splice(i, 1); errs.push({k:'miss', w:ww.w}); } });
+  const G = W.filter(w => w.tot), tot = G.reduce((x, w) => x + w.tot, 0), ok = G.reduce((x, w) => x + w.ok, 0);
+  const acc = tot ? Math.round(100 * ok / tot) : 0, comp = Math.round(100 * G.filter(w => !w.missing).length / Math.max(1, G.length));
+  const wok = Math.round(100 * G.filter(w => !w.missing && w.ok >= w.tot).length / Math.max(1, G.length));
+  let score = Math.round(acc * .4 + wok * .6);
+  if (errs.length) score = Math.min(score, 84);
+  const words = W.map(w => Object.assign(w, {st:!w.tot ? 'ok' : w.missing ? 'bad' : w.ok >= w.tot ? 'ok' : w.ok > 0 ? 'part' : 'bad'})).map(w => Object.assign(w, {ok:w.st === 'ok'}));
+  return {score, acc, comp, extra:[], errs, words, heard:'/' + out.heard.replace(/ /g, '') + '/', device:out.device, pron:true};
+}
 const ipaSpan = (tp, bad = []) => '/' + tp.map((x, i) => bad.includes(i) ? `<b class="phbad">${phIPA(x)}</b>` : phIPA(x)).join('') + '/';
 /* Lời chữa của "giáo viên": lỗi quan trọng trước (thiếu từ, âm cuối, âm khó), tối đa 4 ý */
 function teacherNotes(r){
@@ -1327,9 +1406,10 @@ function teacherNotes(r){
     if (e.k === 'miss') return add('m' + e.w, `<b>Thiếu từ "${esc(e.w)}".</b> Đọc đủ từng từ trong câu, kể cả từ nhỏ.`);
     if (e.k === 'word') return add('w' + e.w, `<b>"${esc(e.w)}"</b> máy nghe thành "${esc(e.s)}". Nghe mẫu chậm rồi đọc lại từ này.`);
     if (e.k === 'ins') return;
-    const ex = e.exp, ip = phIPA(ex), ww = r.words.find(w => w.w === e.w);
+    const ex = e.exp.replace(/\d/g, ''), ip = phIPA(e.exp), ww = r.words.find(w => w.w === e.w);
     const word = `<b>${esc(e.w.replace(/[^A-Za-z'-]/g, ''))}</b> ${ww?.tp ? ipaSpan(ww.tp, ww.errs) : ''}`;
     if (e.k === 'del') return add('d' + ex + e.fin, `${word}: <b>bạn bỏ mất âm /${ip}/${e.fin ? ' ở cuối từ' : ''}.</b> ${e.fin ? 'Người Việt hay nuốt âm cuối. ' : ''}${PH_TIP[ex] || ''}`);
+    if (!e.got) return add('u' + ex, `${word}: <b>âm /${ip}/ chưa chuẩn.</b> ${PH_TIP[ex] || ''}`);
     const key = ex + '>' + e.got;
     add('s' + key, `${word}: <b>âm /${ip}/ bạn đọc thành /${phIPA(e.got)}/.</b> ${PAIR_TIP[key] || PH_TIP[ex] || ''}`);
   });
@@ -1341,7 +1421,7 @@ function teacherNotes(r){
 function noteWeakPh(r){ r.errs.forEach(e => { if (e.exp){ const k = phIPA(e.exp).replace('ː', ''); S.weak[k] = (S.weak[k] || 0) + 1; } }); save(); }
 function scoreHTML(r, heard){
   const c = r.score >= 85 ? 'var(--good)' : r.score >= 60 ? 'var(--sun)' : 'var(--bad)', notes = teacherNotes(r);
-  return `<div class="score"><div class="ring" style="--p:${r.score};--c:${c}"><b>${r.score}</b></div><div class="sm"><span class="muted">Máy nghe:</span> <span class="heard">${esc(heard || '...')}</span><br><span class="xs muted">Đúng âm ${r.acc}% · Đủ từ ${r.comp}%</span></div>${lastClip && micMode() === 'local' ? ib('ear','Nghe lại giọng mình','','data-mine="1"') : ''}</div>
+  return `<div class="score"><div class="ring" style="--p:${r.score};--c:${c}"><b>${r.score}</b></div><div class="sm"><span class="muted">Máy nghe:</span> <span class="heard">${esc(heard || '...')}</span><br><span class="xs muted">Đúng âm ${r.acc}% · Đủ từ ${r.comp}%</span></div>${lastClip && (micMode() === 'local' || r.pron) ? ib('ear','Nghe lại giọng mình','','data-mine="1"') : ''}</div>
   <div class="words">${r.words.map(w => `<span class="w ${w.st}">${esc(w.w)}</span>`).join('')}</div>
   ${notes.length ? `<div class="teach">${notes.map(n => `<p class="sm">${n}</p>`).join('')}</div>` : r.score >= 85 ? '<p class="sm" style="color:var(--good)"><b>Phát âm đúng các âm trong câu. Tốt lắm!</b></p>' : ''}`;
 }
@@ -1637,6 +1717,7 @@ function settingsView(v){
     + fold('st-time', {title:'Khung giờ và nhắc học', sub:SLOTS.map(([k]) => S.set.slots[k]).join(' · '), icon:ico('cal'), name:'set', body:`${SLOTS.map(([k, n]) => `<div class="row spread"><span>${n}</span><input type="time" data-slot="${k}" value="${S.set.slots[k]}"></div>`).join('')}
       <p class="sm muted">Nhắc học bằng Lịch Google: bấm từng nút rồi bấm Lưu.</p>${calButtons()}`})
     + fold('st-voice', {title:'Giọng đọc câu tự thêm', sub:S.set.neural ? 'Giọng tự nhiên (trong máy)' : 'Giọng có sẵn của máy', icon:ico('head'), name:'set', body:`<p class="sm muted">Giọng tự nhiên chạy ngay trong máy, miễn phí. Lần đầu tải khoảng 92 MB (nên dùng wifi). Câu đã tạo giọng được lưu lại, phát ngay cả khi mất mạng.</p><div class="row"><button class="btn ${S.set.neural ? 'ghost' : 'sun'}" id="nvt">${S.set.neural ? 'Tắt giọng tự nhiên' : 'Bật giọng tự nhiên'}</button></div><p class="sm b" id="nvs"></p>`})
+    + fold('st-pron', {title:'Bộ chấm phát âm', sub:pronOn() ? 'Đang dùng bộ chấm trong máy' : 'Đang dùng cách chấm cũ (qua chữ máy nghe)', icon:ico('mic'), name:'set', body:`<p class="sm muted">Bộ chấm trong máy nghe giọng bạn và so <b>từng âm</b> với câu mẫu, không đoán chữ như Chrome nên không tự sửa giúp bạn. Miễn phí, không cần tài khoản. Lần đầu tải khoảng 242 MB (nên dùng wifi), sau đó chấm được cả khi mất mạng.</p><div class="row"><button class="btn ${pronOn() ? 'ghost' : 'sun'}" id="pron1">${pronOn() ? 'Tắt bộ chấm trong máy' : 'Tải và bật'}</button>${pronOn() ? '<button class="btn ghost" id="pron2">Đo tốc độ trên máy này</button>' : ''}</div><p class="sm b" id="pronst"></p><p class="xs muted">Phần nói tự do và nhật ký vẫn dùng micro ở mục dưới, vì không có câu mẫu để so.</p>`})
     + fold('st-mic', {title:'Micro', sub:micMode() === 'google' ? 'Đang dùng micro của Chrome' : 'Đang dùng bộ nhận giọng trong máy', icon:ico('mic'), name:'set', body:`<select id="mic"><option value="auto">Tự động</option><option value="google">Micro của Chrome (nhanh, cần mạng)</option><option value="local">Bộ nhận giọng trong máy (chạy không cần mạng)</option></select>`})
     + fold('st-look', {title:'Cỡ chữ và giao diện', sub:`Chữ ${S.set.font} · ${({'':'theo máy',light:'sáng',dark:'tối'})[S.set.theme || '']}`, icon:ico('font'), name:'set', body:`<div class="row spread"><span class="row">${ico('font')} Cỡ chữ</span><div class="seg" style="box-shadow:none">${['S','M','L'].map(f => `<button aria-pressed="${S.set.font === f}" data-f="${f}">${f}</button>`).join('')}</div></div>
       <div class="row spread"><span class="row">${ico('sun')} Giao diện</span><div class="seg" style="box-shadow:none">${[['','Máy'],['light','Sáng'],['dark','Tối']].map(([k, t]) => `<button aria-pressed="${(S.set.theme || '') === k}" data-t="${k}">${t}</button>`).join('')}</div></div>`})
@@ -1644,6 +1725,14 @@ function settingsView(v){
   v.appendChild(s);
   if (D.public) bindMe(s);
   $('#nvt').onclick = () => { S.set.neural = !S.set.neural; save(); if (S.set.neural){ makeVoices(allNotes(), t => { const e = $('#nvs'); if (e) e.textContent = t; }); makePzVoices(); } render(); };
+  const pst = t => { const e = $('#pronst'); if (e) e.innerHTML = t; };
+  $('#pron1').onclick = async () => {
+    if (pronOn()){ S.set.pron = 'off'; save(); render(); return; }
+    $('#pron1').disabled = true; pst('Đang tải bộ chấm...');
+    try{ const M = await pronMod(); await M.load(pronProg(n => pst(`Đang tải bộ chấm: ${n}% (nên dùng wifi)`))); S.set.pron = 'on'; save(); render(); toast('Đã bật bộ chấm trong máy'); pronTest(); }
+    catch(e){ console.warn(e); pst('Chưa tải được. Kiểm tra mạng rồi thử lại.'); $('#pron1').disabled = false; }
+  };
+  $('#pron2')?.addEventListener('click', pronTest);
   $('#mic').value = S.set.mic;
   $('#mic').onchange = e => { S.set.mic = e.target.value; delete S.set.micAuto; save(); render(); };
   $('#sn').onchange = e => { S.set.name = e.target.value.trim() || 'Tiếng Anh Nhà Mình'; save(); hdr(); };

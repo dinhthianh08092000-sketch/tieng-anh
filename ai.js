@@ -19,7 +19,7 @@ window.AI = {
   async translate(texts, {onProg, onEach} = {}){
     const p = await get('translation', 'Xenova/opus-mt-en-vi', onProg);
     const out = [];
-    for (let i = 0; i < texts.length; i++){ const r = await p(texts[i]); out.push(r[0].translation_text); onEach?.(i + 1, texts.length); }
+    for (let i = 0; i < texts.length; i++){ const r = await p(texts[i], {max_new_tokens: 16 + texts[i].split(' ').length * 4, no_repeat_ngram_size: 3, repetition_penalty: 1.2}); out.push(r[0].translation_text); onEach?.(i + 1, texts.length); }
     return out;
   }
 };

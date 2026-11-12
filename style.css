@@ -239,3 +239,26 @@ details.fold[open] > summary .chev svg{transform:rotate(180deg)}
 .eline input{padding:6px 10px;border-radius:10px}
 [hidden]{display:none!important}
 a.btn{text-decoration:none}
+/* ===== demo 7: ngữ pháp, từ vựng, sổ lỗi sai, 3 mức và sao ===== */
+.quick .wide{grid-column:1/-1;flex-direction:row;align-items:center;gap:12px}
+.n.st,.stx{color:#C98A0C;letter-spacing:1px;white-space:nowrap}
+.n.st{background:color-mix(in srgb,var(--sun) 22%,var(--surface))}
+.stx.big{font-size:1.8em;margin:0}
+.lvopt{text-align:left}.lvopt.on{outline:3px solid var(--sun)}
+.hint{font-family:ui-monospace,Consolas,monospace;letter-spacing:1px;text-align:center;font-size:1.05em;margin:0;color:var(--muted)}
+.blank{color:var(--sun);font-weight:800}
+.ipa-l{text-align:center;color:var(--muted);font-size:1.05em;margin:0}
+.ipa-s{font-weight:400;color:var(--muted);font-size:.85em}
+.wcard{background:var(--surface2);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:8px;text-align:center}
+.wcard .word{font-size:2em;font-weight:800;margin:0}
+.wcard .vi{margin:0}
+.s0{opacity:.28;font-style:normal}
+.rec-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:4px;animation:recb 1s infinite}
+@keyframes recb{50%{opacity:.25}}
+.ibtn.live{background:var(--bad)!important;color:#fff!important}
+/* ===== demo 9: chấm chữa theo từng âm ===== */
+.w.part{background:color-mix(in srgb,var(--sun) 30%,var(--surface));color:var(--ink)}
+.teach{display:flex;flex-direction:column;gap:8px;border-left:4px solid var(--sun);padding:4px 0 4px 12px}
+.teach p{margin:0}
+.phbad{color:var(--bad);text-decoration:underline}
+.lv.mt{background:color-mix(in srgb,var(--sun) 25%,var(--surface));margin-right:4px}

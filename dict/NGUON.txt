@@ -1,0 +1,2 @@
+Nghĩa và câu ví dụ: Free Vietnamese Dictionary Project (Hồ Ngọc Đức và cộng sự), http://www.informatik.uni-leipzig.de/~duc/Dict/ , giấy phép GNU GPL.
+Phiên âm Mỹ: CMU Pronouncing Dictionary, Copyright (C) 1993-2015 Carnegie Mellon University, giấy phép BSD 2 điều khoản.
